@@ -11,6 +11,7 @@ import numpy as np;
 #fourcc = cv.VideoWriter_fourcc(*'XVID')
 #out = cv.VideoWriter('Anh/' + str(datetime.now()) + '.avi', fourcc, 10.0, (640, 480))
 
+
 def capture(imgq, stop):
 
     cam = cv.VideoCapture(0, cv.CAP_DSHOW)
@@ -47,8 +48,6 @@ def process(processedq, imgq, stop):
             processedq.put(frame)
 
     return
-
-
 
 
 if __name__ == "__main__":
