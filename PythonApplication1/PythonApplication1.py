@@ -13,7 +13,7 @@ size = width * height * 3
 #out = cv.VideoWriter('Anh/' + str(datetime.now()) + '.avi', fourcc, 10.0, (640, 480))
 
 
-def capture(imgq, readyin, stop):
+def capture(imgq, readyin, readyproc, stop):
 
     cam = cv.VideoCapture(0, cv.CAP_DSHOW)
     cam.set(cv.CAP_PROP_BUFFERSIZE, 1)
@@ -24,20 +24,21 @@ def capture(imgq, readyin, stop):
     shareframe = np.frombuffer(imgq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
 
     while not stop.is_set():
+        if readyproc.value == 1:
+            check, frame = cam.read()
+            if not check:
+                continue
 
-        check, frame = cam.read()
-        if not check:
-            continue
-
-        np.copyto(shareframe, frame)
-
-        readyin.value = 1
-        
+            np.copyto(shareframe, frame)
+            readyproc.value = 0
+            readyin.value = 1
+        else:
+            time.sleep(0.001)
 
     cam.release()
             
       
-def process(processedq, readyout, imgq, readyin, stop):
+def process(processedq, readyout, imgq, readyin, readyproc, stop):
 
     framein = np.frombuffer(imgq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
     frameout = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
@@ -47,6 +48,7 @@ def process(processedq, readyout, imgq, readyin, stop):
             print("process")
             readyin.value = 0
             np.copyto(frameout, framein)
+            readyproc.value = 1
             readyout.value = 1
         else:
             time.sleep(0.001)
@@ -62,14 +64,14 @@ if __name__ == "__main__":
 
     readyin = mp.Value('b', 0)
     readyout = mp.Value('b', 0)
-    readyproc = mp.Value('b', 0)
+    readyproc = mp.Value('b', 1)
 
-    #stop = mp.Event()
+    stop = mp.Event()
 
-    captureproc = mp.Process (target = capture, args = (imgq, readyin, stop))
+    captureproc = mp.Process (target = capture, args = (imgq, readyin, readyproc, stop))
     captureproc.start()
 
-    processproc = mp.Process (target = process, args = (processedq, readyout, imgq, readyin, stop))
+    processproc = mp.Process (target = process, args = (processedq, readyout, imgq, readyin, readyproc, stop))
     processproc.start()
 
     frame = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape((height, width, 3))
@@ -90,12 +92,15 @@ if __name__ == "__main__":
                 #people = cv.rectangle(frame, (xA, yA, xB, yB), (0, 255, 0), 2)
        
         #out.write(frame)
+        key = cv.waitKey(1)
+        if key == 27:  # ESC Key
+            break
         
        
 
 
-
-    #stop.set()
-    #capture.join()
     #out.release()
-    #cv.destroyAllWindows()
+    stop.set()
+    captureproc.join()
+    processproc.join()
+    cv.destroyAllWindows()
