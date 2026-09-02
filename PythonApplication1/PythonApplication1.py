@@ -4,7 +4,8 @@ import os
 import cv2 as cv
 import numpy as np;
 
-
+width, height = 640, 480
+size = width * height * 3
 #hog = cv.HOGDescriptor()
 #hog.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
 #boxes = None
@@ -12,7 +13,7 @@ import numpy as np;
 #out = cv.VideoWriter('Anh/' + str(datetime.now()) + '.avi', fourcc, 10.0, (640, 480))
 
 
-def capture(imgq, stop):
+def capture(imgq, readyin, stop):
 
     cam = cv.VideoCapture(0, cv.CAP_DSHOW)
     cam.set(cv.CAP_PROP_BUFFERSIZE, 1)
@@ -20,51 +21,62 @@ def capture(imgq, stop):
     cam.set(cv.CAP_PROP_FRAME_HEIGHT, 480)
     cam.set(cv.CAP_PROP_FPS, 30)
 
-    while not stop.is_set():
-        check, frame = cam.read()
-        frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-        if imgq.full():
-            try: 
-                imgq.get_nowait()
-            except Exception:
-                pass
+    shareframe = np.frombuffer(imgq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
 
-        imgq.put(frame)
+    while not stop.is_set():
+
+        check, frame = cam.read()
+        if not check:
+            continue
+
+        np.copyto(shareframe, frame)
+
+        readyin.value = 1
+        
 
     cam.release()
             
       
-def process(processedq, imgq, stop):
+def process(processedq, readyout, imgq, readyin, stop):
+
+    framein = np.frombuffer(imgq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
+    frameout = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
+
     while not stop.is_set():    
-        if not imgq.empty():
+        if readyin.value == 1:
             print("process")
-            frame = imgq.get()
-            
-            if processedq.full():
-                try: 
-                    processedq.get_nowait()
-                except Exception:
-                    pass
-            processedq.put(frame)
+            readyin.value = 0
+            np.copyto(frameout, framein)
+            readyout.value = 1
+        else:
+            time.sleep(0.001)
+          
 
     return
 
 
 if __name__ == "__main__":
 
-    imgq = mp.Queue(maxsize = 3)
-    stop = mp.Event()
+    imgq = mp.Array('B', size)
+    processedq = mp.Array('B', size)
 
-    captureproc = mp.Process (target = capture, args = (imgq, stop))
+    readyin = mp.Value('b', 0)
+    readyout = mp.Value('b', 0)
+    readyproc = mp.Value('b', 0)
+
+    #stop = mp.Event()
+
+    captureproc = mp.Process (target = capture, args = (imgq, readyin, stop))
     captureproc.start()
 
-    processedq = mp.Queue(maxsize = 3)
-    processproc = mp.Process (target = process, args = (processedq, imgq, stop))
+    processproc = mp.Process (target = process, args = (processedq, readyout, imgq, readyin, stop))
     processproc.start()
 
+    frame = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape((height, width, 3))
+
     while True:     
-        if not processedq.empty():
-            frame = processedq.get()
+        if readyout.value == 1:
+            readyout.value = 0
             cv.imshow("image", frame)
 
        
