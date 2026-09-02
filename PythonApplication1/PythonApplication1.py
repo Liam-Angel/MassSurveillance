@@ -40,6 +40,10 @@ def capture(imgq, readyin, readyproc, stop):
       
 def process(processedq, readyout, imgq, readyin, readyproc, stop):
 
+    hog = cv.HOGDescriptor()
+    hog.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
+    boxes = None
+
     framein = np.frombuffer(imgq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
     frameout = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
 
@@ -49,6 +53,13 @@ def process(processedq, readyout, imgq, readyin, readyproc, stop):
             readyin.value = 0
             np.copyto(frameout, framein)
             readyproc.value = 1
+
+            boxes, weights = hog.detectMultiScale(frameout, winStride=(8,8))
+            boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
+        
+            for (xA, yA, xB, yB) in boxes:
+                people = cv.rectangle(frameout, (xA, yA, xB, yB), (0, 255, 0), 2)
+
             readyout.value = 1
         else:
             time.sleep(0.001)
