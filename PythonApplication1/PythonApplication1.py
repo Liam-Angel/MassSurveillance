@@ -6,38 +6,39 @@ import numpy as np;
 
 width, height = 640, 480
 size = width * height * 3
-#fourcc = cv.VideoWriter_fourcc(*'XVID')
-#out = cv.VideoWriter('Anh/' + str(datetime.now()) + '.avi', fourcc, 10.0, (640, 480))
-
 
 def capture(imgq, imgqbuffer, readyin, readyproc, stop):
 
-    cam = cv.VideoCapture(0, cv.CAP_DSHOW)
+    cam = cv.VideoCapture(r"D:\vstudio\PythonApplication1\PythonApplication1\Pedestrian.mp4")
     cam.set(cv.CAP_PROP_BUFFERSIZE, 1)
-    cam.set(cv.CAP_PROP_FRAME_WIDTH, 640)
-    cam.set(cv.CAP_PROP_FRAME_HEIGHT, 480)
+    cam.set(cv.CAP_PROP_FRAME_WIDTH, 1920)
+    cam.set(cv.CAP_PROP_FRAME_HEIGHT, 1080)
     cam.set(cv.CAP_PROP_FPS, 30)
 
     frameout = np.frombuffer(imgq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
     frameoutbuffer = np.frombuffer(imgqbuffer.get_obj(), dtype=np.uint8).reshape(height, width, 3)
 
     while not stop.is_set():
+        if not cam.isOpened():
+            stop.set()
+            break
         
         readyproc.wait()
         print("Getting Frame From Camera")
         check, frame = cam.read()
         if not check:
-            continue
+            break
+        frame = cv.resize(frame, (width, height), interpolation=cv.INTER_AREA)
 
         np.copyto(frameout, frame)
         print("Frame Ready")
         readyproc.clear()
         readyin.set()
-      
+    
     cam.release()
-            
+    return        
       
-def process(processedq, processedqbuffer, readyout, imgq, imgqbuffer, readyin, readyproc, stop):
+def process(processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop):
 
     hog = cv.HOGDescriptor()
     hog.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
@@ -45,43 +46,41 @@ def process(processedq, processedqbuffer, readyout, imgq, imgqbuffer, readyin, r
 
     framein = np.frombuffer(imgq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
     frameout = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape(height, width, 3)
-    frameoutbuffer = np.frombuffer(processedqbuffer.get_obj(), dtype=np.uint8).reshape(height, width, 3)
-
 
     while not stop.is_set():    
         
         readyin.wait()
-        print("Copying Frame For HOG")      
-        np.copyto(frameout, framein)
+        print("Copying Frame For HOG")
+        people = framein.copy()
         readyproc.set()
         readyin.clear()
         print("Starting HOG")
 
-        boxes, weights = hog.detectMultiScale(frameout, winStride=(8,8))
+        boxes, weights = hog.detectMultiScale(people, winStride=(12,12), padding=(0,0), scale=1.05, hitThreshold=0.4, groupThreshold=3)
         boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
-
-        
         
         for (xA, yA, xB, yB) in boxes:
-            cv.rectangle(frameout, (xA, yA, xB, yB), (0, 255, 0), 2)
+            cv.rectangle(people, (xA, int(yA+35), int(xB/4), int(yB/2)), (0, 255, 0), 2)
 
-        if not readyout.is_set():
-            np.copyto(frameoutbuffer, frameout)
-            readyout.set()
+        if not readyout.is_set(): #if the frame in the buffer has been displayed
+            np.copyto(frameout, people) #copies the most recent frame into the buffer
+            readyout.set() #tells the loop to display the frame
 
-        
         print("HOG Done")
         
-          
-
     return
 
-
 if __name__ == "__main__":
+    prevtime = 0
+    newtime = 0
+
+    totaltime = 0
+    counter = 0
+    average = 0
+
     imgqbuffer = mp.Array('B', size)
     imgq = mp.Array('B', size)
 
-    processedqbuffer = mp.Array('B', size)
     processedq = mp.Array('B', size)
 
     readyin = mp.Event()
@@ -95,27 +94,38 @@ if __name__ == "__main__":
     captureproc = mp.Process (target = capture, args = (imgq, imgqbuffer, readyin, readyproc, stop))
     captureproc.start()
 
-    processproc = mp.Process (target = process, args = (processedq, processedqbuffer, readyout, imgq, imgqbuffer, readyin, readyproc, stop))
+    processproc = mp.Process (target = process, args = (processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop))
     processproc.start()
 
     frame = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape((height, width, 3))
 
-    while True:     
-        
-        readyout.wait()
-        print("Showing Frame")
-        cv.imshow("image", frame)
-        readyout.clear()
-        #out.write(frame)
+    while True:           
+        readyout.wait() #waits until a frame is ready
+        newtime = time.time()
+
+        elapsed = newtime - prevtime
+
+        totaltime += elapsed
+        counter +=1
+
+        average = totaltime / counter
+
+        if counter > 20:
+            totaltime = 0
+            counter = 0
+
+        cv.putText(frame, str(average), (5, 70), cv.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv.LINE_AA)
+
+        prevtime = newtime
+
+        cv.imshow("image", frame) #displays the frame
+
+        readyout.clear() #allows another frame to be put in the buffer
 
         key = cv.waitKey(1)
         if key == 27:
             break
-        
-       
 
-
-    #out.release()
     stop.set()
     captureproc.join()
     processproc.join()
