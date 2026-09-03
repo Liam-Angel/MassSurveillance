@@ -68,44 +68,44 @@ def process(processedq, readyout, imgq, readyin, readyproc, stop):
     return
 
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
 
-    imgq = mp.Array('B', size)
-    processedq = mp.Array('B', size)
+imgq = mp.Array('B', size)
+processedq = mp.Array('B', size)
 
-    readyin = mp.Value('b', 0)
-    readyout = mp.Value('b', 0)
-    readyproc = mp.Value('b', 1)
+readyin = mp.Value('b', 0)
+readyout = mp.Value('b', 0)
+readyproc = mp.Value('b', 1)
 
-    stop = mp.Event()
+stop = mp.Event()
 
-    captureproc = mp.Process (target = capture, args = (imgq, readyin, readyproc, stop))
-    captureproc.start()
+captureproc = mp.Process (target = capture, args = (imgq, readyin, readyproc, stop))
+captureproc.start()
 
-    processproc = mp.Process (target = process, args = (processedq, readyout, imgq, readyin, readyproc, stop))
-    processproc.start()
+processproc = mp.Process (target = process, args = (processedq, readyout, imgq, readyin, readyproc, stop))
+processproc.start()
 
-    frame = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape((height, width, 3))
+frame = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape((height, width, 3))
 
-    while True:     
-        if readyout.value == 1:
-            readyout.value = 0
-            cv.imshow("image", frame)
+while True:     
+    if readyout.value == 1:
+        readyout.value = 0
+        cv.imshow("image", frame)
 
-       
-           
-
-
-        #boxes, weights = hog.detectMultiScale(frame, winStride=(8,8))
-        #boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
+    
         
-        #for (xA, yA, xB, yB) in boxes:
-                #people = cv.rectangle(frame, (xA, yA, xB, yB), (0, 255, 0), 2)
-       
-        #out.write(frame)
-        key = cv.waitKey(1)
-        if key == 27:  # ESC Key
-            break
+
+
+    #boxes, weights = hog.detectMultiScale(frame, winStride=(8,8))
+    #boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
+    
+    #for (xA, yA, xB, yB) in boxes:
+            #people = cv.rectangle(frame, (xA, yA, xB, yB), (0, 255, 0), 2)
+    
+    #out.write(frame)
+    key = cv.waitKey(1)
+    if key == 27:  # ESC Key
+        break
         
        
 
