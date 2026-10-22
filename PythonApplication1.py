@@ -16,11 +16,14 @@ connection.mav.param_request_list_send(connection.target_system, connection.targ
 parameters = {}
 while True:
     m = connection.recv_match(type='PARAM_VALUE', blocking = True, timeout = 5)
+    pid = m.param_id
+    pv = m.param_value
     if not m:
         break
-    print(m)
-    time.sleep(2)
-    
+    parameters[pid] = pv
+    print(pid, pv)
+    if m.param_index + 1 == m.param_count:
+        break
 
 
 
