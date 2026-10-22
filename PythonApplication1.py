@@ -12,18 +12,22 @@ print("Program Start")
 connection = mavutil.mavlink_connection("/dev/ttyACM0", baud=115200)
 connection.wait_heartbeat()
 print("beat")
-connection.mav.param_request_list_send(connection.target_system, connection.target_component)
+connection.mav.request_data_stream_send(connection.target_system, connection.target_component, mavutil.mavlink.MAV_DATA_STREAM_EXTRA1, 10, 1)
 parameters = {}
 while True:
-    m = connection.recv_match(type='PARAM_VALUE', blocking = True, timeout = 5)
-    pid = m.param_id
-    pv = m.param_value
-    if not m:
-        break
-    parameters[pid] = pv
-    print(pid, pv)
-    if m.param_index + 1 == m.param_count:
-        break
+    m = connection.recv_match(type='VFR_HUD', blocking = True, timeout = 5)
+    if m:
+        print(m.heading)
+    print ("ok")
+
+    #pid = m.param_id
+    #pv = m.param_value
+    #if not m:
+       # break
+   # parameters[pid] = pv
+   # print(pid, pv)
+   # if m.param_index + 1 == m.param_count:
+    #    break
 
 
 
