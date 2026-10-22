@@ -3,13 +3,31 @@ import multiprocessing as mp
 import os
 import cv2 as cv
 import numpy as np;
+from pymavlink import mavutil
 
 width, height = 640, 480
 size = width * height * 3
 
+print("Program Start")
+connection = mavutil.mavlink_connection("/dev/ttyACM0", baud=115200)
+connection.wait_heartbeat()
+print("beat")
+connection.mav.param_request_list_send(connection.target_system, connection.target_component)
+parameters = {}
+while True:
+    m = connection.recv_match(type='PARAM_VALUE', blocking = True, timeout = 5)
+    if not m:
+        break
+    print(m)
+    time.sleep(2)
+    
+
+
+
+
 def capture(imgq, imgqbuffer, readyin, readyproc, stop):
 
-    cam = cv.VideoCapture(r"D:\vstudio\PythonApplication1\PythonApplication1\Pedestrian.mp4")
+    cam = cv.VideoCapture(0, cv.CAP_V4L2)
     cam.set(cv.CAP_PROP_BUFFERSIZE, 1)
     cam.set(cv.CAP_PROP_FRAME_WIDTH, 1920)
     cam.set(cv.CAP_PROP_FRAME_HEIGHT, 1080)
@@ -56,7 +74,7 @@ def process(processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop):
         readyin.clear()
         print("Starting HOG")
 
-        boxes, weights = hog.detectMultiScale(people, winStride=(12,12), padding=(0,0), scale=1.05, hitThreshold=0.4, groupThreshold=3)
+        boxes, weights = hog.detectMultiScale(people, winStride=(90,90), padding=(0,0), scale=1.05, hitThreshold=0.4, groupThreshold=3)
         boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
         
         for (xA, yA, xB, yB) in boxes:
@@ -70,63 +88,62 @@ def process(processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop):
         
     return
 
-if __name__ == "__main__":
-    prevtime = 0
-    newtime = 0
+prevtime = 0
+newtime = 0
 
-    totaltime = 0
-    counter = 0
-    average = 0
+totaltime = 0
+counter = 0
+average = 0
 
-    imgqbuffer = mp.Array('B', size)
-    imgq = mp.Array('B', size)
+imgqbuffer = mp.Array('B', size)
+imgq = mp.Array('B', size)
 
-    processedq = mp.Array('B', size)
+processedq = mp.Array('B', size)
 
-    readyin = mp.Event()
-    readyout = mp.Event()
-    readyproc = mp.Event()
+readyin = mp.Event()
+readyout = mp.Event()
+readyproc = mp.Event()
 
-    readyproc.set()
+readyproc.set()
 
-    stop = mp.Event()
-    
-    captureproc = mp.Process (target = capture, args = (imgq, imgqbuffer, readyin, readyproc, stop))
-    captureproc.start()
+stop = mp.Event()
 
-    processproc = mp.Process (target = process, args = (processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop))
-    processproc.start()
+captureproc = mp.Process (target = capture, args = (imgq, imgqbuffer, readyin, readyproc, stop))
+captureproc.start()
 
-    frame = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape((height, width, 3))
+processproc = mp.Process (target = process, args = (processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop))
+processproc.start()
 
-    while True:           
-        readyout.wait() #waits until a frame is ready
-        newtime = time.time()
+frame = np.frombuffer(processedq.get_obj(), dtype=np.uint8).reshape((height, width, 3))
 
-        elapsed = newtime - prevtime
+while True:           
+    readyout.wait() #waits until a frame is ready
+    newtime = time.time()
 
-        totaltime += elapsed
-        counter +=1
+    elapsed = newtime - prevtime
 
-        average = totaltime / counter
+    totaltime += elapsed
+    counter +=1
 
-        if counter > 20:
-            totaltime = 0
-            counter = 0
+    average = totaltime / counter
 
-        cv.putText(frame, str(average), (5, 70), cv.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv.LINE_AA)
+    if counter > 20:
+        totaltime = 0
+        counter = 0
 
-        prevtime = newtime
+    cv.putText(frame, str(average), (5, 70), cv.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv.LINE_AA)
 
-        cv.imshow("image", frame) #displays the frame
+    prevtime = newtime
 
-        readyout.clear() #allows another frame to be put in the buffer
+    cv.imshow("image", frame) #displays the frame
 
-        key = cv.waitKey(1)
-        if key == 27:
-            break
+    readyout.clear() #allows another frame to be put in the buffer
 
-    stop.set()
-    captureproc.join()
-    processproc.join()
-    cv.destroyAllWindows()
+    key = cv.waitKey(1)
+    if key == 27:
+        break
+
+stop.set()
+captureproc.join()
+processproc.join()
+cv.destroyAllWindows()
