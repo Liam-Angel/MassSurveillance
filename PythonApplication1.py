@@ -12,21 +12,24 @@ print("Program Start")
 connection = mavutil.mavlink_connection("/dev/ttyACM0", baud=115200)
 connection.wait_heartbeat()
 print("beat")
-connection.mav.param_request_list_send(connection.target_system, connection.target_component)
+name = 'BARO1_GND_PRESS'
+connection.mav.param_request_read_send(connection.target_system, connection.target_component, name.encode("utf-8"), -1)
 parameters = {}
 while True:
     m = connection.recv_match(type='PARAM_VALUE', blocking = True, timeout = 5)
+    if m == None:
+        break
     pid = m.param_id
     pv = m.param_value
-    if not m:
-        break
     parameters[pid] = pv
-    if "COMPASS" in pid:
-        print(pid, pv)
-        
-    if m.param_index + 1 == m.param_count:
-        continue
+    #if "COMPASS" in pid:
+    print(pid, pv)
 
+    if m.param_index + 1 == m.param_count:
+        connection.mav.param_request_list_send(connection.target_system, connection.target_component)
+    key = cv.waitKey(1)
+    if key == 27:
+        break
 
 
 
