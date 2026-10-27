@@ -7,29 +7,37 @@ from pymavlink import mavutil
 
 width, height = 640, 480
 size = width * height * 3
+conwait = 1
 
 print("Program Start")
+
+
+
 connection = mavutil.mavlink_connection("/dev/ttyACM0", baud=115200)
+        
+
 connection.wait_heartbeat()
+       
 print("beat")
-name = 'BARO1_GND_PRESS'
-connection.mav.param_request_read_send(connection.target_system, connection.target_component, name.encode("utf-8"), -1)
+name = 'BARO1_GND_PRESS'.encode("utf-8")
+
 parameters = {}
 while True:
-    m = connection.recv_match(type='PARAM_VALUE', blocking = True, timeout = 5)
-    if m == None:
-        break
-    pid = m.param_id
-    pv = m.param_value
-    parameters[pid] = pv
-    #if "COMPASS" in pid:
-    print(pid, pv)
+    print("go")
+    connection.mav.param_request_read_send(connection.target_system, connection.target_component, mavutil.mavlink.MAV_DATA_STREAM_EXTRA1, 4, 1)
+    #connection.mav.gps_raw_int_send()
 
-    if m.param_index + 1 == m.param_count:
-        connection.mav.param_request_list_send(connection.target_system, connection.target_component)
-    key = cv.waitKey(1)
-    if key == 27:
-        break
+    print("what")
+    m = connection.recv_match(type='VFR_HUD', blocking = True)
+    print("m")
+    if m:
+        print("it exists")
+        #pid = m.param_id
+        #pv = m.param_value
+        #parameters[pid] = pv
+        #print(pid, pv)
+
+
 
 
 
