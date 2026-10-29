@@ -10,34 +10,24 @@ size = width * height * 3
 conwait = 1
 
 print("Program Start")
-
-
-
-connection = mavutil.mavlink_connection("/dev/ttyACM0", baud=115200)
-        
-
-connection.wait_heartbeat()
        
-print("beat")
-name = 'BARO1_GND_PRESS'.encode("utf-8")
+def mav(connection, data):
 
-parameters = {}
-while True:
-    print("go")
-    connection.mav.param_request_read_send(connection.target_system, connection.target_component, mavutil.mavlink.MAV_DATA_STREAM_EXTRA1, 4, 1)
-    #connection.mav.gps_raw_int_send()
-
-    print("what")
-    m = connection.recv_match(type='VFR_HUD', blocking = True)
-    print("m")
-    if m:
-        print("it exists")
-        #pid = m.param_id
-        #pv = m.param_value
-        #parameters[pid] = pv
-        #print(pid, pv)
-
-
+    connection.mav.command_long_send(
+    connection.target_system,
+    connection.target_component,
+    mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE,
+    0,  
+    74, 
+    0, 
+    0,  
+    0,  
+    0,  
+    0,  
+    0,  
+    )
+    data = connection.recv_match(type='VFR_HUD', blocking = True)
+    return(data)
 
 
 
@@ -58,14 +48,14 @@ def capture(imgq, imgqbuffer, readyin, readyproc, stop):
             break
         
         readyproc.wait()
-        print("Getting Frame From Camera")
+        #print("Getting Frame From Camera")
         check, frame = cam.read()
         if not check:
             break
         frame = cv.resize(frame, (width, height), interpolation=cv.INTER_AREA)
 
         np.copyto(frameout, frame)
-        print("Frame Ready")
+        #print("Frame Ready")
         readyproc.clear()
         readyin.set()
     
@@ -84,13 +74,13 @@ def process(processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop):
     while not stop.is_set():    
         
         readyin.wait()
-        print("Copying Frame For HOG")
+        #print("Copying Frame For HOG")
         people = framein.copy()
         readyproc.set()
         readyin.clear()
-        print("Starting HOG")
+        #print("Starting HOG")
 
-        boxes, weights = hog.detectMultiScale(people, winStride=(90,90), padding=(0,0), scale=1.05, hitThreshold=0.4, groupThreshold=3)
+        boxes, weights = hog.detectMultiScale(people, winStride=(16,16), padding=(0,0), scale=1.05, hitThreshold=0.4, groupThreshold=3)
         boxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
         
         for (xA, yA, xB, yB) in boxes:
@@ -100,9 +90,17 @@ def process(processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop):
             np.copyto(frameout, people) #copies the most recent frame into the buffer
             readyout.set() #tells the loop to display the frame
 
-        print("HOG Done")
+        #print("HOG Done")
         
     return
+
+
+
+connection = mavutil.mavlink_connection("/dev/ttyACM0", baud=115200)
+connection.wait_heartbeat()
+print("hearbeat")
+
+data = None
 
 prevtime = 0
 newtime = 0
@@ -136,6 +134,7 @@ while True:
     readyout.wait() #waits until a frame is ready
     newtime = time.time()
 
+
     elapsed = newtime - prevtime
 
     totaltime += elapsed
@@ -146,6 +145,9 @@ while True:
     if counter > 20:
         totaltime = 0
         counter = 0
+
+    data = mav(connection, data)
+    print(data)
 
     cv.putText(frame, str(average), (5, 70), cv.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 1, cv.LINE_AA)
 

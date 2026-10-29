@@ -105,7 +105,7 @@ def process(processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop):
 
 
 if __name__ == "__main__":
-    #data = mp.Value(ctypes.c_wchar_p, "why")
+    data = None
     connection = mavutil.mavlink_connection('COM4', baud=115200)
     connection.wait_heartbeat()
     print("Heartbeat Found")
@@ -131,12 +131,8 @@ if __name__ == "__main__":
 
     stop = mp.Event()
 
-
     captureproc = mp.Process (target = capture, args = (imgq, imgqbuffer, readyin, readyproc, stop))
     captureproc.start()
-
-    #mavproc = mp.Process (target = mav, args = (data,))
-    #mavproc.start()
 
     processproc = mp.Process (target = process, args = (processedq, readyout, imgq, imgqbuffer, readyin, readyproc, stop))
     processproc.start()
@@ -171,25 +167,12 @@ if __name__ == "__main__":
 
         prevtime = newtime
 
-        cv.imshow("image", frame) #displays the frame
-
-        connection.mav.command_long_send(
-        connection.target_system,
-        connection.target_component,
-        mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE,
-        0,  
-        74, 
-        0, 
-        0,  
-        0,  
-        0,  
-        0,  
-        0,  
-        )
-        data = connection.recv_match(type='VFR_HUD', blocking = True)
-        print("Data Read")
+        mav(data)
         print(data)
 
+        cv.imshow("image", frame) #displays the frame
+
+        
         readyout.clear() #allows another frame to be put in the buffer
 
         key = cv.waitKey(1)
